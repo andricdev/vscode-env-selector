@@ -5,6 +5,10 @@
   "icon": "images/logo.png",
   "version": "0.1.0",
   "publisher": "andricdev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/andricdev/vscode-env-selector.git"
+  },
   "engines": {
     "vscode": "^1.49.0"
   },
