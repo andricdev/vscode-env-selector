@@ -3,7 +3,7 @@
   "displayName": ".ENV Selector",
   "description": "Switch .env file content.",
   "icon": "images/logo.png",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "andricdev",
   "repository": {
     "type": "git",
@@ -16,7 +16,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:envSelector.selectEnv"
+    "workspaceContains:**/*.env*"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -24,6 +24,29 @@
       {
         "command": "envSelector.selectEnv",
         "title": "🔀.ENV Selector"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "envSelector.selectEnv",
+        "key": "ctrl+k ctrl+e"
+      }
+    ],
+    "configuration": [
+      {
+        "title": ".ENV Seletcor",
+        "properties": {
+          "envSelector.enabled": {
+            "markdownDescription": "Enable/Disable the extension globally, or per workspace.   \r\n _*Requires window reload to take effect.*_",
+            "type": "boolean",
+            "default": true
+          },
+          "envSelector.regex": {
+            "markdownDescription": "regex pattern to find preset `.env` files.",
+            "type": "string",
+            "default": "*.env*"
+          }
+        }
       }
     ]
   },
