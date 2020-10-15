@@ -4,6 +4,15 @@ import * as vscode from 'vscode';
 import { window, Disposable, StatusBarAlignment, StatusBarItem, Command, Uri } from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { type } from 'os';
+const lnk = require('lnk')
+const md5File = require('md5-file')
+
+const OS_TYPE = type();
+const WINDOWS_TYPE = 'Windows_NT'
+const IS_ENABLED = vscode.workspace.getConfiguration('envSelector').get('enabled') as boolean;
+const REGEX = vscode.workspace.getConfiguration('envSelector').get('regex') as string;
+const ENV_NAME = '.env';
 
 async function asyncForEach(array: readonly any[] | undefined, callback: Function) {
   if (array)
@@ -19,8 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
   // This line of code will only be executed once when your extension is activated
   // console.log('Congratulations, your extension "vscode-env-selector" is now active!');
 
-  const isEnabled = vscode.workspace.getConfiguration('envSelector').get('enabled') as boolean;
-  if (!isEnabled) {
+  if (!IS_ENABLED) {
     vscode.window.showErrorMessage(`🔀.ENV Selector is disabled!`);
     return;
   }
@@ -33,11 +41,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (vscode.workspace.workspaceFolders) {
       const uris: any[] = [];
-      const regex = vscode.workspace.getConfiguration('envSelector').get('regex') as string;
+
       await asyncForEach(vscode.workspace.workspaceFolders, async (folder: any) => {
-        await vscode.workspace.findFiles(new vscode.RelativePattern(folder, `**/${regex}`)).then(async (foundUris) => {
+        await vscode.workspace.findFiles(new vscode.RelativePattern(folder, `**/${REGEX}`)).then(async (foundUris) => {
           foundUris
-            .filter((u) => u.path.substring(u.path.lastIndexOf('/') + 1) !== '.env')
+            .filter((u) => u.path.substring(u.path.lastIndexOf('/') + 1) !== ENV_NAME)
             .forEach((u) => {
               uris.push({
                 ...u,
@@ -68,13 +76,26 @@ export function activate(context: vscode.ExtensionContext) {
         if (env) {
           const base = env.path.substring(0, env.path.lastIndexOf('/') + 1);
           try {
-            await fs.unlinkSync(`${base}.env`);
-          } catch (error) {}
-          await fs.symlinkSync(env.path, `${base}.env`);
+            let envPath = `${base}${ENV_NAME}`;
+            if (OS_TYPE !== WINDOWS_TYPE) {
+              await fs.unlinkSync(envPath);
+            }
+          } catch (error) { }
+
+          if (OS_TYPE === WINDOWS_TYPE) {
+            let winTarget = path.join(env.path);
+            winTarget = winTarget.startsWith('\\') ? winTarget.substring(1) : winTarget;
+            let winPath = path.join(`${base}`);
+            winPath = winPath.startsWith('\\') ? winPath.substring(1) : winPath;
+
+            lnk.sync(winTarget, winPath, { rename: ENV_NAME, force: true })
+          } else {
+            await fs.symlinkSync(env.path, `${base}${ENV_NAME}`);
+          }
           vscode.window.showInformationMessage(`${env.label} in ${env.description} is selected!`);
         }
       } else {
-        vscode.window.showInformationMessage(`There are no .env files!`);
+        vscode.window.showInformationMessage(`There are no ${ENV_NAME} files!`);
       }
     } else {
       vscode.window.showInformationMessage(`There are no workspaces!`);
@@ -93,7 +114,33 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }
+
+const getWinPath = (p: string): string => {
+  const winPath = path.join(p);
+  return winPath.startsWith('\\') ? winPath.substring(1) : winPath;
+}
+const getRealPath = async (envPath: string): Promise<string> => {
+  let realPath = '';
+  if (OS_TYPE === WINDOWS_TYPE) {
+    const base = envPath.substring(0, envPath.lastIndexOf('/'));
+    const envHash = await md5File.sync(getWinPath(envPath), { algorithm: 'md5' });
+
+    const paths = await vscode.workspace.findFiles(new vscode.RelativePattern(base, `**/${REGEX}`)).then((foundUris) => {
+      return foundUris
+        .filter((u) => u.path.substring(u.path.lastIndexOf('/') + 1) !== ENV_NAME)
+    });
+    await asyncForEach(paths, async (u: any) => {
+      const fileHash = await md5File.sync(getWinPath(u.path), { algorithm: 'md5' });
+      if (envHash === fileHash) {
+        realPath = u.path
+      }
+    })
+  } else {
+    realPath = await fs.realpathSync(envPath);
+  }
+  return realPath;
+}
 
 class EnvIndicator {
   private _statusBarItem!: StatusBarItem;
@@ -114,12 +161,12 @@ class EnvIndicator {
     let doc = editor.document;
     let envPath = await this._getEnvIndicator(doc);
     if (envPath) {
-      const realPath = fs.realpathSync(envPath);
+      const realPath = await getRealPath(envPath);
       this._statusBarItem.text = `⚙️${realPath.substring(realPath.lastIndexOf('/') + 1)}`;
       const command: Command = {
-        title: 'Open .env file.',
+        title: `Open ${ENV_NAME} file.`,
         command: 'vscode.open',
-        arguments: [Uri.file(realPath)],
+        arguments: [Uri.file(OS_TYPE === WINDOWS_TYPE ? getWinPath(realPath) : realPath)],
       };
       this._statusBarItem.command = command;
       this._statusBarItem.show();
@@ -131,7 +178,7 @@ class EnvIndicator {
   public async getEnv(filePath: any): Promise<string> {
     let uris: any[] = [];
     await asyncForEach(vscode.workspace.workspaceFolders, async (folder: any) => {
-      await vscode.workspace.findFiles(new vscode.RelativePattern(folder, `**/.env`)).then((foundUris) => {
+      await vscode.workspace.findFiles(new vscode.RelativePattern(folder, `**/${ENV_NAME}`)).then((foundUris) => {
         foundUris.forEach((u) => {
           uris.push({
             ...u,

@@ -2,6 +2,10 @@
 
 Changes to **.ENV Selector** can be found in this file.
 
+## - 0.3.0
+
+- cross-platform support (Windows)
+
 ## - 0.2.0
 
 - Added regex to configuration
