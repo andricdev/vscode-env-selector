@@ -88,7 +88,9 @@ export function activate(context: vscode.ExtensionContext) {
             let winPath = path.join(`${base}`);
             winPath = winPath.startsWith('\\') ? winPath.substring(1) : winPath;
 
-            lnk.sync(winTarget, winPath, { rename: ENV_NAME, force: true })
+            try {
+              lnk.sync(winTarget, winPath, { rename: ENV_NAME, force: true })
+            } catch (error) { }
           } else {
             await fs.symlinkSync(env.path, `${base}${ENV_NAME}`);
           }
